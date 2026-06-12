@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CANNON.exe</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #050505;
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* CRT scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+#terminal {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 32px 100px;
+  min-height: 100vh;
+}
+
+#output {
+  font-size: 15px;
+  line-height: 2;
+}
+
+.line { display: block; white-space: pre; }
+.line.empty { height: 1.6em; display: block; }
+
+.c-green  { color: #00ff41; }
+.c-dim    { color: #005518; }
+.c-pink   { color: #ff2d78; }
+.c-gold   { color: #ffd700; }
+.c-purple { color: #cc44ff; }
+.c-cyan   { color: #00e5ff; }
+
+.glow { text-shadow: 0 0 8px currentColor, 0 0 22px currentColor; }
+
+.ascii-art {
+  font-size: 13px;
+  line-height: 1.38;
+  color: #ff2d78;
+  text-shadow: 0 0 8px #ff2d78, 0 0 28px #ff006a, 0 0 50px #c8005a;
+  display: block;
+  white-space: pre;
+}
+
+#cursor {
+  display: inline-block;
+  width: 9px;
+  height: 1.05em;
+  background: #00ff41;
+  vertical-align: text-bottom;
+  animation: blink .85s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.werk-line {
+  font-size: 24px;
+  letter-spacing: 7px;
+  color: #ffd700;
+  display: block;
+  white-space: pre;
+  text-shadow: 0 0 12px #ffd700, 0 0 30px #ff9500;
+  animation: werkpulse 2s ease-in-out infinite;
+}
+
+@keyframes werkpulse {
+  0%, 100% { text-shadow: 0 0 12px #ffd700, 0 0 30px #ff9500; }
+  50%       { text-shadow: 0 0 24px #ffd700, 0 0 60px #ff9500, 0 0 90px #ff2d78; }
+}
+
+#glitter-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* mobile: shrink ASCII art */
+@media (max-width: 600px) {
+  #terminal { padding: 24px 16px 80px; }
+  #output { font-size: 13px; }
+  .ascii-art { font-size: 7.5px; line-height: 1.3; }
+  .werk-line { font-size: 17px; letter-spacing: 4px; }
+}
+</style>
+</head>
+<body>
+<canvas id="glitter-canvas"></canvas>
+<div id="terminal">
+  <div id="output"><span id="cursor"></span></div>
+</div>
+
+<script>
+const output   = document.getElementById('output');
+const cursor   = document.getElementById('cursor');
+const terminal = document.getElementById('terminal');
+
+/* ── Glitter / confetti ──────────────────────────────── */
+const canvas = document.getElementById('glitter-canvas');
+const ctx    = canvas.getContext('2d');
+let glitterOn = false;
+const sparks  = [];
+
+function resizeCanvas() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const COLORS = ['#ff2d78','#ffd700','#cc44ff','#00e5ff','#ffffff','#ff6ec7','#ff9500'];
+
+class Spark {
+  constructor(born = false) {
+    this.x     = Math.random() * canvas.width;
+    this.y     = born ? Math.random() * canvas.height : -12;
+    this.vy    = Math.random() * 2.5 + 1;
+    this.vx    = (Math.random() - 0.5) * 2;
+    this.size  = Math.random() * 5 + 2;
+    this.rot   = Math.random() * 360;
+    this.rotV  = (Math.random() - 0.5) * 4;
+    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    this.rect  = Math.random() > 0.4;
+  }
+  update() {
+    this.y += this.vy; this.x += this.vx; this.rot += this.rotV;
+    if (this.y > canvas.height + 12) { this.y = -12; this.x = Math.random() * canvas.width; }
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot * Math.PI / 180);
+    ctx.fillStyle = this.color;
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur  = 5;
+    if (this.rect) {
+      ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size * 1.7);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, -this.size);
+      ctx.lineTo(this.size * .55, 0);
+      ctx.lineTo(0, this.size);
+      ctx.lineTo(-this.size * .55, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function glitterLoop() {
+  if (!glitterOn) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  sparks.forEach(s => { s.update(); s.draw(); });
+  requestAnimationFrame(glitterLoop);
+}
+
+function startGlitter() {
+  if (glitterOn) return;
+  glitterOn = true;
+  for (let i = 0; i < 100; i++) sparks.push(new Spark(i < 45));
+  glitterLoop();
+}
+
+/* ── Terminal helpers ────────────────────────────────── */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function ins(el) {
+  output.insertBefore(el, cursor);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function addLine(text, cls = '') {
+  const s = document.createElement('span');
+  s.className = 'line ' + cls;
+  s.textContent = text;
+  ins(s);
+  return s;
+}
+
+function addEmpty() {
+  const s = document.createElement('span');
+  s.className = 'line empty';
+  ins(s);
+}
+
+async function type(text, cls = 'c-green', speed = 38) {
+  const s = document.createElement('span');
+  s.className = 'line ' + cls;
+  ins(s);
+  for (const ch of text) {
+    s.textContent += ch;
+    terminal.scrollTop = terminal.scrollHeight;
+    await sleep(speed + (Math.random() * 8 - 4));
+  }
+  return s;
+}
+
+async function loadBar() {
+  const s = document.createElement('span');
+  s.className = 'line c-green';
+  ins(s);
+  for (let i = 0; i <= 20; i++) {
+    s.textContent = `> [${'█'.repeat(i)}${' '.repeat(20 - i)}] ${i * 5}%`;
+    terminal.scrollTop = terminal.scrollHeight;
+    await sleep(28);
+  }
+}
+
+/* ── Main sequence ───────────────────────────────────── */
+async function run() {
+  await sleep(700);
+
+  await type('> INITIALIZING BIRTHDAY.EXE...', 'c-green', 36);
+  await sleep(200);
+  await loadBar();
+  await sleep(150);
+  await type('> SYSTEM READY.', 'c-green', 36);
+  addEmpty();
+
+  await sleep(300);
+  await type('> SCANNING DATABASE...', 'c-dim', 24);
+  await sleep(450);
+  await type('> TARGET IDENTIFIED:  GOOD CANNON', 'c-green glow', 42);
+  await sleep(150);
+  await type('> STATUS:  ICONIC ✓   LEGENDARY ✓   THAT GIRL ✓', 'c-cyan', 30);
+  addEmpty();
+
+  await sleep(300);
+  await type('═══════════════════════════════════════════════════', 'c-gold',  8);
+  await sleep(80);
+  await type('            THE BALLROOM IS NOW IN SESSION          ', 'c-gold glow', 16);
+  await sleep(80);
+  await type('═══════════════════════════════════════════════════', 'c-gold',  8);
+  addEmpty();
+
+  await sleep(300);
+  await type('> CATEGORY IS:', 'c-green', 38);
+  await sleep(200);
+  await type('  ✦  BIRTHDAY.  REALNESS.  ✦', 'c-pink glow', 52);
+  addEmpty();
+
+  await sleep(300);
+  await type('> MC CALLING TO THE FLOOR...', 'c-green', 36);
+  await sleep(300);
+  await type('> FROM THE LEGENDARY HOUSE OF GOOD CANNON,', 'c-purple glow', 34);
+  await sleep(200);
+  await type('> WALKING IN THE CATEGORY OF:', 'c-purple', 34);
+  await sleep(200);
+  await type('  BIRTHDAY QUEEN REALNESS — GAGA APPROVED ✦', 'c-pink glow', 36);
+  await sleep(800);
+  addEmpty();
+
+  /* ── ASCII art ── */
+  const art = [
+    ' ██████╗  █████╗ ███╗   ██╗███╗   ██╗ ██████╗ ███╗   ██╗',
+    '██╔════╝ ██╔══██╗████╗  ██║████╗  ██║██╔═══██╗████╗  ██║',
+    '██║      ███████║██╔██╗ ██║██╔██╗ ██║██║   ██║██╔██╗ ██║',
+    '██║      ██╔══██║██║╚██╗██║██║╚██╗██║██║   ██║██║╚██╗██║',
+    '╚██████╗ ██║  ██║██║ ╚████║██║ ╚████║╚██████╔╝██║ ╚████║',
+    ' ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═══╝',
+  ];
+  for (const row of art) {
+    const s = document.createElement('span');
+    s.className = 'ascii-art';
+    s.textContent = row;
+    ins(s);
+    await sleep(60);
+  }
+  addEmpty();
+
+  /* ── Glitter drops ── */
+  startGlitter();
+  await sleep(500);
+
+  await type('> YOU WERE BORN THIS WAY.', 'c-gold glow', 44);
+  await sleep(200);
+  await type('> YOU ARE THE MOMENT.', 'c-pink glow', 44);
+  await sleep(200);
+  await type('> BAD ROMANCE?  NO.  BEST BIRTHDAY.', 'c-cyan glow', 38);
+  addEmpty();
+
+  await sleep(300);
+  await type('  ✦  JUDGES\' SCORES :   10    10    10   ✦', 'c-gold glow', 36);
+  addEmpty();
+
+  await sleep(400);
+  await type('> HAPPY BIRTHDAY, GOOD CANNON.  ♥', 'c-pink glow', 50);
+  addEmpty();
+
+  await sleep(500);
+
+  /* WERK */
+  const werk = document.createElement('span');
+  werk.className = 'werk-line';
+  werk.textContent = '  ✦  W  E  R  K .  ✦';
+  ins(werk);
+  terminal.scrollTop = terminal.scrollHeight;
+
+  await sleep(300);
+  cursor.style.display = 'none';
+}
+
+run();
+</script>
+</body>
+</html>
