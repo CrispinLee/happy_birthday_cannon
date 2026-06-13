@@ -1,145 +1,431 @@
 <!DOCTYPE html>
 <html lang="zh">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CANNON.exe</title>
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Happy Birthday!</title>
+  <style>
+    /* ── 全局 ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-body {
-  background: #050505;
-  font-family: 'Courier New', Courier, monospace;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
+    body {
+      background: #0d0d0d;
+      color: #ccc;
+      font-family: 'Courier New', Courier, monospace;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
 
-/* CRT scanline overlay */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg, transparent, transparent 3px,
-    rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
-  );
-  pointer-events: none;
-  z-index: 100;
-}
+    /* ── 伪终端标题栏 ── */
+    #titlebar {
+      flex-shrink: 0;
+      background: #1e1e1e;
+      border-bottom: 1px solid #333;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.red    { background: #ff5f56; }
+    .dot.yellow { background: #ffbd2e; }
+    .dot.green  { background: #27c93f; }
+    #titlebar span {
+      margin-left: auto;
+      font-size: 12px;
+      color: #666;
+      letter-spacing: .04em;
+    }
 
-#terminal {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 40px 32px 100px;
-  min-height: 100vh;
-}
+    /* ── 终端主体 ── */
+    #terminal {
+      flex: 1;
+      overflow: auto;
+      padding: 18px 24px 18px 20px;
+      cursor: default;
+    }
 
-#output {
-  font-size: 15px;
-  line-height: 2;
-}
+    /* ── ASCII 艺术区 ── */
+    #art {
+      font-size: clamp(5px, 0.9vw, 11px);
+      line-height: 1.15;
+      white-space: pre;
+      letter-spacing: .03em;
+    }
 
-.line { display: block; white-space: pre; }
-.line.empty { height: 1.6em; display: block; }
+    /* ── CANNON 霓虹横幅（参考1 同款 ANSI Shadow 字体） ── */
+    #banner {
+      display: block;
+      white-space: pre;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: clamp(7px, 1.15vw, 14px);
+      line-height: 1.05;
+      letter-spacing: 0;            /* 方块字必须零字距才能拼接成字 */
+      color: #ff2d78;
+      text-shadow: 0 0 8px #ff2d78, 0 0 28px #ff006a, 0 0 50px #c8005a;
+      margin: 10px auto 4px;
+      width: max-content;
+      opacity: 0;
+      transition: opacity 1.2s ease-in;
+    }
+    #banner.show { opacity: 1; }
 
-.c-green  { color: #00ff41; }
-.c-dim    { color: #005518; }
-.c-pink   { color: #ff2d78; }
-.c-gold   { color: #ffd700; }
-.c-purple { color: #cc44ff; }
-.c-cyan   { color: #00e5ff; }
+    /* ── 霓虹大眼表情（参考2 同款，逐字彩虹发光） ── */
+    #eyes {
+      display: block;
+      white-space: pre;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: clamp(7px, 1.1vw, 14px);
+      line-height: 1.4;
+      letter-spacing: 0;
+      margin: 24px auto 10px;
+      width: max-content;
+      opacity: 0;
+      transition: opacity 1.4s ease-in;
+    }
+    #eyes.show { opacity: 1; }
 
-.glow { text-shadow: 0 0 8px currentColor, 0 0 22px currentColor; }
+    /* ── 礼花 / 闪片画布（参考2） ── */
+    #glitter-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+    }
 
-.ascii-art {
-  font-size: 13px;
-  line-height: 1.38;
-  color: #ff2d78;
-  text-shadow: 0 0 8px #ff2d78, 0 0 28px #ff006a, 0 0 50px #c8005a;
-  display: block;
-  white-space: pre;
-}
+    /* ── 颜色类 ── */
+    .c-grey    { color: #888; }
+    .c-red     { color: #ff5555; }
+    .c-green   { color: #55ff55; }
+    .c-yellow  { color: #ffff55; }
+    .c-blue    { color: #5599ff; }
+    .c-magenta { color: #ff55ff; }
+    .c-cyan    { color: #55ffff; }
+    .c-white   { color: #ffffff; }
+    .c-random  { color: var(--rand-color, #ffffff); }
 
-#cursor {
-  display: inline-block;
-  width: 9px;
-  height: 1.05em;
-  background: #00ff41;
-  vertical-align: text-bottom;
-  animation: blink .85s step-end infinite;
-  margin-left: 2px;
-}
+    /* ── 闪烁 ── */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+    .blink { animation: blink 0.9s step-end infinite; }
 
-@keyframes blink { 50% { opacity: 0; } }
+    /* ── 光标 ── */
+    #cursor {
+      display: inline-block;
+      width: 7px; height: 1em;
+      background: #55ff55;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
 
-.werk-line {
-  font-size: 24px;
-  letter-spacing: 7px;
-  color: #ffd700;
-  display: block;
-  white-space: pre;
-  text-shadow: 0 0 12px #ffd700, 0 0 30px #ff9500;
-  animation: werkpulse 2s ease-in-out infinite;
-}
+    /* ── 音频按钮 ── */
+    #audiobtn {
+      position: fixed;
+      z-index: 60;
+      bottom: 16px; right: 18px;
+      background: #1e1e1e;
+      border: 1px solid #444;
+      color: #aaa;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background .15s, color .15s;
+    }
+    #audiobtn:hover { background: #2a2a2a; color: #fff; }
 
-@keyframes werkpulse {
-  0%, 100% { text-shadow: 0 0 12px #ffd700, 0 0 30px #ff9500; }
-  50%       { text-shadow: 0 0 24px #ffd700, 0 0 60px #ff9500, 0 0 90px #ff2d78; }
-}
-
-#glitter-canvas {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 50;
-}
-
-/* mobile: shrink ASCII art */
-@media (max-width: 600px) {
-  #terminal { padding: 24px 16px 80px; }
-  #output { font-size: 13px; }
-  .ascii-art { font-size: 7.5px; line-height: 1.3; }
-  .werk-line { font-size: 17px; letter-spacing: 4px; }
-}
-</style>
+    /* ── 滚动条 ── */
+    #terminal::-webkit-scrollbar { width: 6px; }
+    #terminal::-webkit-scrollbar-track { background: #111; }
+    #terminal::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  </style>
 </head>
 <body>
 <canvas id="glitter-canvas"></canvas>
-<div id="terminal">
-  <div id="output"><span id="cursor"></span></div>
+
+<!-- ─────────────────────────────────────────────────────────────────
+     ✏️  自定义区  —— 只需修改这里
+     ──────────────────────────────────────────────────────────────── -->
+<script>
+  const CONFIG = {
+    name:  "Big Cannon",          // 收件人姓名（目前只显示在标题栏）
+    title: "Happy Birthday! 🎂",  // 浏览器标签页标题
+    speed: 0.3,                   // 每字符间隔（毫秒）。越小越快，0 = 瞬间完成
+    audio: "Just Dance.mp3",   // 音频文件路径（与 index.html 同目录）
+  };
+</script>
+<!-- ──────────────────────────────────────────────────────────────── -->
+
+<!-- 标题栏 -->
+<div id="titlebar">
+  <div class="dot red"></div>
+  <div class="dot yellow"></div>
+  <div class="dot green"></div>
+  <span id="tab-title">bash — PyBirthdayWish</span>
 </div>
 
-<script>
-const output   = document.getElementById('output');
-const cursor   = document.getElementById('cursor');
-const terminal = document.getElementById('terminal');
+<!-- 终端 -->
+<div id="terminal">
+  <pre id="art"></pre>
+  <span id="cursor"></span>
+  <pre id="banner">██╗  ██╗ █████╗ ██████╗ ██████╗ ██╗   ██╗
+██║  ██║██╔══██╗██╔══██╗██╔══██╗╚██╗ ██╔╝
+███████║███████║██████╔╝██████╔╝ ╚████╔╝
+██╔══██║██╔══██║██╔═══╝ ██╔═══╝   ╚██╔╝
+██║  ██║██║  ██║██║     ██║        ██║
+╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝        ╚═╝
 
-/* ── Glitter / confetti ──────────────────────────────── */
+██████╗ ██╗██████╗ ████████╗██╗  ██╗██████╗  █████╗ ██╗   ██╗
+██╔══██╗██║██╔══██╗╚══██╔══╝██║  ██║██╔══██╗██╔══██╗╚██╗ ██╔╝
+██████╔╝██║██████╔╝   ██║   ███████║██║  ██║███████║ ╚████╔╝
+██╔══██╗██║██╔══██╗   ██║   ██╔══██║██║  ██║██╔══██║  ╚██╔╝
+██████╔╝██║██║  ██║   ██║   ██║  ██║██████╔╝██║  ██║   ██║
+╚═════╝ ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝   ╚═╝
+
+██████╗ ██╗ ██████╗      ██████╗ █████╗ ███╗   ██╗███╗   ██╗ ██████╗ ███╗   ██╗
+██╔══██╗██║██╔════╝     ██╔════╝██╔══██╗████╗  ██║████╗  ██║██╔═══██╗████╗  ██║
+██████╔╝██║██║  ███╗    ██║     ███████║██╔██╗ ██║██╔██╗ ██║██║   ██║██╔██╗ ██║
+██╔══██╗██║██║   ██║    ██║     ██╔══██║██║╚██╗██║██║╚██╗██║██║   ██║██║╚██╗██║
+██████╔╝██║╚██████╔╝    ╚██████╗██║  ██║██║ ╚████║██║ ╚████║╚██████╔╝██║ ╚████║
+╚═════╝ ╚═╝ ╚═════╝      ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═══╝</pre>
+  <pre id="eyes"></pre>
+</div>
+
+<!-- 音频 -->
+<audio id="bgaudio" loop></audio>
+<button id="audiobtn" title="切换音乐">♪ 音乐</button>
+
+<script>
+// ──────────────────────────────────────────────
+// ASCII 艺术字符串（原版 example.py 的 mainArt）
+// ──────────────────────────────────────────────
+const RAW_ART = `
+®❤                                 ★                          ❤         ❤                                ❤                          ❤          *
+®             *                                    ®   ❤                                  ✺
+            ②   _..._  ,s$$$s.                                                                                    ⑤     _..._  ,s$$$s.
+           ② .$$$$$$$s$$ss$$$$,     ®                   ❤                     ❤                                   ⑤   .$$$$$$$s$$ss$$$$,
+           ② $$$sss$$$$s$$$$$$$                                                                                  ⑤   $$$sss$$$$s$$$$$$$
+           ② $$ss$$$$$$$$$$$$$$                                   (             )                                ⑤   $$ss$$$$$$$$$$$$$$
+®  ❤        ② '$$$s$$$$$$$$$$$$'     ®  ❣                   )      (⑨*⑩)           (⑨*⑩)      (                        ⑤   '$$$s$$$$$$$$$$$$'
+           ②  '$$$$$$$$$$$$$$'                           (⑨*⑩)      |             |      (⑨*⑩)        ®❣              ⑤    '$$$$$$$$$$$$$$'
+           ②    S$$$$$$$$$$$'                             |      ⑤|~|           ④|~|      ②|                        ⑤      S$$$$$$$$$$$'
+ ®❤         ②     '$$$$$$$$$'                             ③|~|     ⑤| |           ④| |     ⑥|~|                       ⑤       '$$$$$$$$$'      ®    *
+           ②       '$$$$$'     ®   ★           ✺          ③| |     ⑤| |           ④| |     ⑥| |           ®❤           ⑤         '$$$$$'
+           ②        '$$$'                               ⑧,③| |⑧a@@@@⑤| |⑧@@@@@@@@@@@④| |⑧@@@@a⑥| |⑧.                      ⑤          '$$$'
+           ②          ;                            ⑧.,a@@@③| |⑧@@@@@⑤| |⑧@@@@@@@@@@@④| |⑧@@@@@⑥| |⑧@@@@a,.                        ⑤    ;
+   ®❤       ②         ;                           ⑧,a@@@@@@③| |⑧@@@@@@@@@@@@.@@@@@@@@@@@@@@⑥| |⑧@@@@@@@a,       ® ❤             ⑤   ;
+           ②        ;                          ⑧a@@@@@@@@@@@@@@@@@@@@@' ⑦.⑧ \`@@@@@@@@@@@@@@@@@@@@@@@@a                      ⑤  ;
+           ②        ',      ®    ★              ⑧;\`@@@@@@@@@@@@@@@@@@'   ⑦.⑧   \`@@@@@@@@@@@@@@@@@@@@@';                      ⑤  ',
+           ②         ;                         ⑧;@@@\`@@@@@@@@@@@@@'     ⑦.⑧     \`@@@@@@@@@@@@@@@@'@@@;       ®   ★           ⑤   ;
+           ②   ❤    ,'                         ⑧;@@@;,.aaaaaaaaaa       ⑦.⑧       aaaaa,,aaaaaaa,;@@@;                      ⑤  ,'
+           ②        ;                          ⑧;;@;;;;@@@@@@@@;@      ⑦@.@⑧      ;@@@;;;②@@@@@@⑧;;;;@@;                      ⑤  ;    ®        ❤
+           ②        ',                         ⑧;;;;;;;⑤@@@@⑧;@@;;@    ⑦@@ . @@⑧    ;;@;;;;@@;@@@;;;;;;;                      ⑤  ',
+           ②         ',                        ⑧;;;;;;;;@@;;;;;;;  ⑦@@   ⑦.   @@⑧  ;;;;;;;;;;;@@;;;;@;;                      ⑤   ',
+®❤         ②          ;         ®❣              ⑧;;;;;;;;;;;;;;;;;⑦@@     ⑦.     @@⑧;;;;;;;;;;;;;;;;@@@;         ®❤            ⑤    ;
+           ②         '                     ⑦,%%%⑧;;;;;;;;@;;;;;;;;       ⑦.       ⑧;;;;;;;;;;;;;;;;@@;;⑦%%%,                  ⑤    '
+                                       ⑦.%%%%%%⑧;;;;;;;②@@⑧;;;;;;;;     ⑦,%%%,⑧     ;;;;;;;;;;;;;;;;;;;;⑦%%%%%%,
+                                      ⑦.%%%%%%%⑧;;;;;;;@@;;;;;;;;   ⑦,%%%%%%%,⑧   ;;;;;;;;;;;;;;;;;;;;⑦%%%%%%%,
+  ®  ✺               ®❤                 ⑦%%%%%%%%⑧\`;;;;;;;;;;;;;;;;  ⑦%%%%%%%%%%%⑧  ;;;;;;;;;;;;;;;;;;;'⑦%%%%%%%%
+                                      ⑦%%%%%%%%%%%%⑧\`;;;;;;;;;;;;⑦,%%%%%%%%%%%%%⑧,;;;;;;;;;;;;;;;'⑦%%%%%%%%%%%%              ®★           ®        ❤
+                                      ⑦\`%%%%%%%%%%%%%%%%%,,,,,,,%%%%%%%%%%%%%%%,,,,,,,%%%%%%%%%%%%%%%%%%%%'
+                                        ⑦\`%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+          ®★                                ⑦\`%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
+®❤                           ★                      ⑦""""""""""""""""\`,,,,,,,,,\'"""""""""""""""""                       ®            ✺
+                                                                  ②\`%%%%%%%'
+                                                                   ②\`%%%%%'                     ®   *                     ❤
+                  ®✺                                                  ②%%%
+®      ❤                               *                             ②%%%%%                ®  ★            ®          ❤                       *
+                                                                 ②.,%%%%%%%,.
+                                                            ②,%%%%%%%%%%%%%%%%%%%,                         ®                 ❤
+`;
+
+// ──────────────────────────────────────────────
+// 颜色映射
+// ──────────────────────────────────────────────
+const COLOR_MAP = {
+  '\u2460': 'c-grey',
+  '\u2461': 'c-red',
+  '\u2462': 'c-green',
+  '\u2463': 'c-yellow',
+  '\u2464': 'c-blue',
+  '\u2465': 'c-magenta',
+  '\u2466': 'c-cyan',
+  '\u2467': 'c-white',
+};
+const CODE_BLINK_ON  = '\u2468'; // ⑨
+const CODE_BLINK_OFF = '\u2469'; // ⑩
+const CODE_RANDOM    = '\u00ae'; // ®
+const RANDOM_COLORS  = ['c-red','c-green','c-yellow','c-blue','c-magenta','c-cyan','c-white'];
+const COLOR_CODES    = new Set([...Object.keys(COLOR_MAP), CODE_BLINK_ON, CODE_BLINK_OFF, CODE_RANDOM]);
+
+// ──────────────────────────────────────────────
+// 将原始字符串解析为 token 数组
+// 每个 token: { ch, colorClass, blink }
+// ──────────────────────────────────────────────
+function parseArt(raw) {
+  const tokens = [];
+  let curColor = '';
+  let isBlink  = false;
+  let isRandom = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (ch === CODE_BLINK_ON)  { isBlink = true;  continue; }
+    if (ch === CODE_BLINK_OFF) { isBlink = false; continue; }
+    if (ch === CODE_RANDOM)    { isRandom = true;  continue; }
+    if (COLOR_MAP[ch]) {
+      curColor  = COLOR_MAP[ch];
+      isRandom  = false;
+      continue;
+    }
+
+    // 正常字符
+    let colorClass = curColor;
+    if (isRandom) {
+      colorClass = RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
+    }
+
+    tokens.push({ ch, colorClass, blink: isBlink });
+  }
+  return tokens;
+}
+
+// ──────────────────────────────────────────────
+// 将 token 渲染成 HTML span（行优先，减少 DOM 操作）
+// ──────────────────────────────────────────────
+function tokensToHtml(tokens) {
+  let html = '';
+  for (const { ch, colorClass, blink } of tokens) {
+    if (!colorClass && !blink) {
+      // 纯文本，直接拼接（转义特殊字符）
+      html += ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch;
+    } else {
+      const cls = [colorClass, blink ? 'blink' : ''].filter(Boolean).join(' ');
+      const escaped = ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch;
+      html += `<span class="${cls}">${escaped}</span>`;
+    }
+  }
+  return html;
+}
+
+// ──────────────────────────────────────────────
+// 逐字打印动画
+// ──────────────────────────────────────────────
+const artEl    = document.getElementById('art');
+const cursorEl = document.getElementById('cursor');
+
+function animate(tokens, speed, onDone) {
+  if (speed === 0) {
+    // 瞬间完成
+    artEl.innerHTML = tokensToHtml(tokens);
+    cursorEl.style.display = 'none';
+    if (onDone) onDone();
+    return;
+  }
+
+  // 按行分组，减少 reflow
+  const lines = [[]];
+  for (const tok of tokens) {
+    if (tok.ch === '\n') { lines.push([]); } else { lines[lines.length - 1].push(tok); }
+  }
+
+  let lineIdx = 0;
+  let charIdx = 0;
+
+  function step() {
+    if (lineIdx >= lines.length) {
+      cursorEl.style.display = 'none';
+      if (onDone) onDone();
+      return;
+    }
+    const line = lines[lineIdx];
+
+    if (charIdx === 0) {
+      // 添加新的 <span> 行容器
+      const lineSpan = document.createElement('span');
+      lineSpan.id = `line-${lineIdx}`;
+      artEl.appendChild(lineSpan);
+      if (lineIdx > 0) artEl.insertBefore(document.createTextNode('\n'), lineSpan);
+    }
+
+    const lineEl = document.getElementById(`line-${lineIdx}`);
+
+    if (charIdx < line.length) {
+      const { ch, colorClass, blink } = line[charIdx];
+      if (colorClass || blink) {
+        const s = document.createElement('span');
+        const cls = [colorClass, blink ? 'blink' : ''].filter(Boolean).join(' ');
+        s.className = cls;
+        s.textContent = ch;
+        lineEl.appendChild(s);
+      } else {
+        lineEl.appendChild(document.createTextNode(ch));
+      }
+      charIdx++;
+      setTimeout(step, speed);
+    } else {
+      lineIdx++;
+      charIdx = 0;
+      setTimeout(step, speed);
+    }
+  }
+  step();
+}
+
+// ──────────────────────────────────────────────
+// 音频控制
+// ──────────────────────────────────────────────
+const audio   = document.getElementById('bgaudio');
+const audioBtn = document.getElementById('audiobtn');
+let playing = false;
+
+audio.src = CONFIG.audio;
+
+audioBtn.addEventListener('click', () => {
+  if (playing) {
+    audio.pause();
+    audioBtn.textContent = '♪ 音乐';
+    playing = false;
+  } else {
+    audio.play().then(() => {
+      audioBtn.textContent = '⏸ 暂停';
+      playing = true;
+    }).catch(() => {
+      audioBtn.textContent = '❌ 无音频';
+    });
+  }
+});
+
+// ──────────────────────────────────────────────
+// 礼花 / 闪片（参考2）
+// ──────────────────────────────────────────────
 const canvas = document.getElementById('glitter-canvas');
 const ctx    = canvas.getContext('2d');
 let glitterOn = false;
 const sparks  = [];
-
-function resizeCanvas() {
-  canvas.width  = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-const COLORS = ['#ff2d78','#ffd700','#cc44ff','#00e5ff','#ffffff','#ff6ec7','#ff9500'];
-
+const SPARK_COLORS = ['#ff2d78','#ffd700','#cc44ff','#00e5ff','#ffffff','#ff6ec7','#ff9500'];
 class Spark {
   constructor(born = false) {
-    this.x     = Math.random() * canvas.width;
-    this.y     = born ? Math.random() * canvas.height : -12;
-    this.vy    = Math.random() * 2.5 + 1;
-    this.vx    = (Math.random() - 0.5) * 2;
-    this.size  = Math.random() * 5 + 2;
-    this.rot   = Math.random() * 360;
-    this.rotV  = (Math.random() - 0.5) * 4;
-    this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    this.rect  = Math.random() > 0.4;
+    this.x = Math.random() * canvas.width;
+    this.y = born ? Math.random() * canvas.height : -12;
+    this.vy = Math.random() * 2.5 + 1;
+    this.vx = (Math.random() - 0.5) * 2;
+    this.size = Math.random() * 5 + 2;
+    this.rot = Math.random() * 360;
+    this.rotV = (Math.random() - 0.5) * 4;
+    this.color = SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)];
+    this.rect = Math.random() > 0.4;
   }
   update() {
     this.y += this.vy; this.x += this.vx; this.rot += this.rotV;
@@ -149,31 +435,26 @@ class Spark {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot * Math.PI / 180);
-    ctx.fillStyle = this.color;
-    ctx.shadowColor = this.color;
-    ctx.shadowBlur  = 5;
+    ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 5;
     if (this.rect) {
-      ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size * 1.7);
+      ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size * 1.7);
     } else {
       ctx.beginPath();
       ctx.moveTo(0, -this.size);
-      ctx.lineTo(this.size * .55, 0);
+      ctx.lineTo(this.size * 0.55, 0);
       ctx.lineTo(0, this.size);
-      ctx.lineTo(-this.size * .55, 0);
-      ctx.closePath();
-      ctx.fill();
+      ctx.lineTo(-this.size * 0.55, 0);
+      ctx.closePath(); ctx.fill();
     }
     ctx.restore();
   }
 }
-
 function glitterLoop() {
   if (!glitterOn) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   sparks.forEach(s => { s.update(); s.draw(); });
   requestAnimationFrame(glitterLoop);
 }
-
 function startGlitter() {
   if (glitterOn) return;
   glitterOn = true;
@@ -181,146 +462,66 @@ function startGlitter() {
   glitterLoop();
 }
 
-/* ── Terminal helpers ────────────────────────────────── */
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function ins(el) {
-  output.insertBefore(el, cursor);
-  terminal.scrollTop = terminal.scrollHeight;
-}
-
-function addLine(text, cls = '') {
-  const s = document.createElement('span');
-  s.className = 'line ' + cls;
-  s.textContent = text;
-  ins(s);
-  return s;
-}
-
-function addEmpty() {
-  const s = document.createElement('span');
-  s.className = 'line empty';
-  ins(s);
-}
-
-async function type(text, cls = 'c-green', speed = 38) {
-  const s = document.createElement('span');
-  s.className = 'line ' + cls;
-  ins(s);
-  for (const ch of text) {
-    s.textContent += ch;
-    terminal.scrollTop = terminal.scrollHeight;
-    await sleep(speed + (Math.random() * 8 - 4));
+// ──────────────────────────────────────────────
+// 霓虹大眼表情（参考2），逐字彩虹发光
+// ──────────────────────────────────────────────
+const gagaArt = [
+  '    · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ ·',
+  '  ✦                                                         ✦',
+  '  ·      /|/|/|/|/|/|/|/|/|           /|/|/|/|/|/|/|/|/|  ·',
+  '  ✦    ╔═══════════════════════╗   ╔═══════════════════════╗✦',
+  '  ·    ║                       ║   ║                       ║ ·',
+  '  ✦    ║   ██████████████████  ║   ║  ██████████████████   ║ ✦',
+  '  ·    ║  ██  ████████████  ██ ║   ║ ██  ████████████  ██  ║ ·',
+  '  ✦    ║  ██  ████████████  ██ ║   ║ ██  ████████████  ██  ║>>>✦',
+  '  ·    ║  ██  ████████████  ██ ║   ║ ██  ████████████  ██  ║ ·',
+  '  ✦    ║   ██████████████████  ║   ║  ██████████████████   ║ ✦',
+  '  ·    ║                       ║   ║                       ║ ·',
+  '  ✦    ╚═══════════════════════╝   ╚═══════════════════════╝✦',
+  '  ·                     ≋  ≋  ≋  ≋  ≋  ≋  ≋                ·',
+  '  ✦                                                         ✦',
+  '    · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ · ✦ ·',
+];
+const RAINBOW = ['#ff2d78','#ffd700','#cc44ff','#00e5ff','#00ff41','#ff6600','#ff6ec7','#ffffff'];
+function renderEyes(el) {
+  let html = '';
+  for (const row of gagaArt) {
+    html += '<span class="eyes-row">';
+    for (const ch of row) {
+      if (ch === ' ') { html += ' '; continue; }
+      const c = RAINBOW[Math.floor(Math.random() * RAINBOW.length)];
+      const esc = ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch;
+      html += `<span style="color:${c};text-shadow:0 0 5px ${c}">${esc}</span>`;
+    }
+    html += '</span>\n';
   }
-  return s;
+  el.innerHTML = html;
 }
 
-async function loadBar() {
-  const s = document.createElement('span');
-  s.className = 'line c-green';
-  ins(s);
-  for (let i = 0; i <= 20; i++) {
-    s.textContent = `> [${'█'.repeat(i)}${' '.repeat(20 - i)}] ${i * 5}%`;
-    terminal.scrollTop = terminal.scrollHeight;
-    await sleep(28);
-  }
-}
+// ──────────────────────────────────────────────
+// 启动
+// ──────────────────────────────────────────────
+document.title = CONFIG.title;
+document.getElementById('tab-title').textContent =
+  `bash — Happy Birthday, ${CONFIG.name}!`;
 
-/* ── Main sequence ───────────────────────────────────── */
-async function run() {
-  await sleep(700);
+const tokens   = parseArt(RAW_ART);
+const bannerEl = document.getElementById('banner');
+const eyesEl   = document.getElementById('eyes');
+renderEyes(eyesEl);
+animate(tokens, CONFIG.speed, () => {
+  // 打字动画结束 → 点亮霓虹横幅 → 大眼表情淡入 → 撒礼花
+  setTimeout(() => bannerEl.classList.add('show'), 250);
+  setTimeout(() => { eyesEl.classList.add('show'); startGlitter(); }, 1200);
+});
 
-  await type('> INITIALIZING BIRTHDAY.EXE...', 'c-green', 36);
-  await sleep(200);
-  await loadBar();
-  await sleep(150);
-  await type('> SYSTEM READY.', 'c-green', 36);
-  addEmpty();
-
-  await sleep(300);
-  await type('> SCANNING DATABASE...', 'c-dim', 24);
-  await sleep(450);
-  await type('> TARGET IDENTIFIED:  GOOD CANNON', 'c-green glow', 42);
-  await sleep(150);
-  await type('> STATUS:  ICONIC ✓   LEGENDARY ✓   THAT GIRL ✓', 'c-cyan', 30);
-  addEmpty();
-
-  await sleep(300);
-  await type('═══════════════════════════════════════════════════', 'c-gold',  8);
-  await sleep(80);
-  await type('            THE BALLROOM IS NOW IN SESSION          ', 'c-gold glow', 16);
-  await sleep(80);
-  await type('═══════════════════════════════════════════════════', 'c-gold',  8);
-  addEmpty();
-
-  await sleep(300);
-  await type('> CATEGORY IS:', 'c-green', 38);
-  await sleep(200);
-  await type('  ✦  BIRTHDAY.  REALNESS.  ✦', 'c-pink glow', 52);
-  addEmpty();
-
-  await sleep(300);
-  await type('> MC CALLING TO THE FLOOR...', 'c-green', 36);
-  await sleep(300);
-  await type('> FROM THE LEGENDARY HOUSE OF GOOD CANNON,', 'c-purple glow', 34);
-  await sleep(200);
-  await type('> WALKING IN THE CATEGORY OF:', 'c-purple', 34);
-  await sleep(200);
-  await type('  BIRTHDAY QUEEN REALNESS — GAGA APPROVED ✦', 'c-pink glow', 36);
-  await sleep(800);
-  addEmpty();
-
-  /* ── ASCII art ── */
-  const art = [
-    ' ██████╗  █████╗ ███╗   ██╗███╗   ██╗ ██████╗ ███╗   ██╗',
-    '██╔════╝ ██╔══██╗████╗  ██║████╗  ██║██╔═══██╗████╗  ██║',
-    '██║      ███████║██╔██╗ ██║██╔██╗ ██║██║   ██║██╔██╗ ██║',
-    '██║      ██╔══██║██║╚██╗██║██║╚██╗██║██║   ██║██║╚██╗██║',
-    '╚██████╗ ██║  ██║██║ ╚████║██║ ╚████║╚██████╔╝██║ ╚████║',
-    ' ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═══╝',
-  ];
-  for (const row of art) {
-    const s = document.createElement('span');
-    s.className = 'ascii-art';
-    s.textContent = row;
-    ins(s);
-    await sleep(60);
-  }
-  addEmpty();
-
-  /* ── Glitter drops ── */
-  startGlitter();
-  await sleep(500);
-
-  await type('> YOU WERE BORN THIS WAY.', 'c-gold glow', 44);
-  await sleep(200);
-  await type('> YOU ARE THE MOMENT.', 'c-pink glow', 44);
-  await sleep(200);
-  await type('> BAD ROMANCE?  NO.  BEST BIRTHDAY.', 'c-cyan glow', 38);
-  addEmpty();
-
-  await sleep(300);
-  await type('  ✦  JUDGES\' SCORES :   10    10    10   ✦', 'c-gold glow', 36);
-  addEmpty();
-
-  await sleep(400);
-  await type('> HAPPY BIRTHDAY, GOOD CANNON.  ♥', 'c-pink glow', 50);
-  addEmpty();
-
-  await sleep(500);
-
-  /* WERK */
-  const werk = document.createElement('span');
-  werk.className = 'werk-line';
-  werk.textContent = '  ✦  W  E  R  K .  ✦';
-  ins(werk);
-  terminal.scrollTop = terminal.scrollHeight;
-
-  await sleep(300);
-  cursor.style.display = 'none';
-}
-
-run();
+// 尝试自动播放（现代浏览器需用户交互后才允许）
+audio.play().then(() => {
+  audioBtn.textContent = '⏸ 暂停';
+  playing = true;
+}).catch(() => {
+  // 静默失败，等用户点击按钮
+});
 </script>
 </body>
 </html>
